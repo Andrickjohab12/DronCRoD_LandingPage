@@ -1,7 +1,8 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { AlertTriangle, CheckCircle2, Cpu, RefreshCw, ShieldAlert } from "lucide-react"
+import { Activity, AlertTriangle, CheckCircle2, Cpu, Database, Gauge, RefreshCw, ShieldAlert, Terminal } from "lucide-react"
+import { useState } from "react"
 import { ArtificialHorizon, FlightIndicators, HeadingDial } from "./flight-indicators"
 import { TelemetryTerminal } from "./telemetry-terminal"
 import { hasGpsFix, type TelemetryState } from "./useTelemetry"
@@ -22,12 +23,14 @@ function uptime(seconds: number) {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="group -mx-2 flex items-baseline justify-between gap-4 border-b border-border/60 px-2 py-2.5 transition-colors last:border-0 hover:bg-primary/5">
+    <div className="group mb-1.5 flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/25 px-2.5 py-2 transition-colors last:mb-0 hover:border-primary/25 hover:bg-primary/5 sm:-mx-2 sm:mb-0 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:bg-transparent sm:px-2 sm:py-2.5 sm:last:border-0">
       <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground group-hover:text-primary">
         <span className="h-1 w-1 rounded-full bg-primary/60" />
         {label}
       </span>
-      <span className="font-mono text-[13px] font-semibold text-foreground">{value}</span>
+      <span className="max-w-[58%] truncate rounded-md bg-primary/8 px-2 py-1 text-right font-mono text-[12px] font-semibold text-primary sm:max-w-none sm:bg-transparent sm:p-0 sm:text-[13px] sm:text-foreground">
+        {value}
+      </span>
     </div>
   )
 }
@@ -41,6 +44,50 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       </div>
       <div className="px-4 py-2.5">{children}</div>
     </Card>
+  )
+}
+
+type MonitorSection = "overview" | "instruments" | "telemetry" | "systems" | "terminal"
+
+const MONITOR_SECTIONS = [
+  { id: "overview", label: "Resumen", icon: Activity },
+  { id: "instruments", label: "Vuelo", icon: Gauge },
+  { id: "telemetry", label: "Datos", icon: Database },
+  { id: "systems", label: "Sistemas", icon: Cpu },
+  { id: "terminal", label: "Terminal", icon: Terminal },
+] satisfies { id: MonitorSection; label: string; icon: typeof Activity }[]
+
+function MobilePanelSelector({
+  active,
+  onChange,
+}: {
+  active: MonitorSection
+  onChange: (section: MonitorSection) => void
+}) {
+  return (
+    <nav className="sticky top-16 z-30 -mx-3 border-y border-primary/15 bg-background/95 px-3 py-2 backdrop-blur-md lg:hidden">
+      <div className="scrollbar-none flex gap-1.5 overflow-x-auto">
+        {MONITOR_SECTIONS.map((section) => {
+          const Icon = section.icon
+          const selected = active === section.id
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => onChange(section.id)}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                selected
+                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                  : "border border-border bg-card text-muted-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {section.label}
+            </button>
+          )
+        })}
+      </div>
+    </nav>
   )
 }
 
@@ -95,6 +142,7 @@ function OperationalStatus({ telemetry }: { telemetry: TelemetryState }) {
 }
 
 export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
+  const [mobileSection, setMobileSection] = useState<MonitorSection>("overview")
   const stats = telemetry.data
   const gpsOk = hasGpsFix(stats)
   const weather = useWeather(gpsOk ? stats.latitude : undefined, gpsOk ? stats.longitude : undefined)
@@ -103,7 +151,7 @@ export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
   const linkLabel = radioOn ? "Enlace SiK" : "Desconectado"
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5 px-6 py-6">
+    <div className="mx-auto max-w-[1600px] space-y-4 px-3 py-4 sm:px-6 sm:py-6 lg:space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="gcs-kicker">Telemetría</p>
@@ -152,11 +200,14 @@ export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
         </div>
       </div>
 
-      <OperationalStatus telemetry={telemetry} />
+      <MobilePanelSelector active={mobileSection} onChange={setMobileSection} />
 
-      <FlightIndicators data={stats} />
+      <section className={`${mobileSection === "overview" ? "space-y-4" : "hidden"} lg:block lg:space-y-5`}>
+        <OperationalStatus telemetry={telemetry} />
+        <FlightIndicators data={stats} />
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+      <section className={`${mobileSection === "instruments" ? "grid" : "hidden"} gap-4 lg:grid lg:grid-cols-[1.25fr_0.75fr]`}>
         <Panel title="Instrumentación primaria">
           <div className="grid place-items-center gap-5 py-3 sm:grid-cols-2">
             <ArtificialHorizon roll={stats.roll} pitch={stats.pitch} />
@@ -171,9 +222,9 @@ export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
           <Row label="Batería temp." value={stats.battery_temp == null ? "—" : fmt(stats.battery_temp, 1, "°C")} />
           <Row label="Enlace" value={linkLabel} />
         </Panel>
-      </div>
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <section className={`${mobileSection === "telemetry" ? "grid" : "hidden"} gap-4 lg:grid lg:grid-cols-3`}>
         <Panel title="Vuelo">
           <Row label="Groundspeed" value={fmt(stats.speed, 2, "m/s")} />
           <Row label="Airspeed" value={fmt(stats.airspeed, 2, "m/s")} />
@@ -194,9 +245,9 @@ export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
           <Row label="RSSI remoto" value={stats.remote_rssi == null ? "—" : `${fmt(stats.remote_rssi, 0)}`} />
           <Row label="TX buffer" value={stats.txbuf == null ? "—" : String(stats.txbuf)} />
         </Panel>
-      </div>
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <section className={`${mobileSection === "systems" ? "grid" : "hidden"} gap-4 lg:grid lg:grid-cols-3`}>
         <Panel title="Autopiloto">
           <Row label="Stack" value={stats.autopilot || "—"} />
           <Row label="Firmware" value={stats.firmware || "—"} />
@@ -242,13 +293,15 @@ export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
           />
           <Row label="Cielo" value={weather?.condition ?? "—"} />
         </Panel>
-      </div>
+      </section>
 
-      <Panel title="Terminal MAVLink">
-        <div className="-mx-4 -mb-2">
-          <TelemetryTerminal telemetry={telemetry} />
-        </div>
-      </Panel>
+      <section className={mobileSection === "terminal" ? "block" : "hidden lg:block"}>
+        <Panel title="Terminal MAVLink">
+          <div className="-mx-4 -mb-2">
+            <TelemetryTerminal telemetry={telemetry} />
+          </div>
+        </Panel>
+      </section>
     </div>
   )
 }

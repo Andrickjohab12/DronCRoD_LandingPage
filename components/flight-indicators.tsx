@@ -50,19 +50,19 @@ function MetricCard({
   warning?: boolean
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg">
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg sm:p-4">
       <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-blue-400 to-transparent" />
-      <div className="flex items-center gap-4">
-        <div className="relative h-16 w-16 shrink-0">
+      <div className="flex items-center gap-2.5 sm:gap-4">
+        <div className="relative h-11 w-11 shrink-0 sm:h-16 sm:w-16">
           <Arc value={percent} color={warning ? "stroke-red-500" : "stroke-primary"} />
           <div className={`absolute inset-0 flex items-center justify-center ${warning ? "text-red-500" : "text-primary"}`}>
             {icon}
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-          <p className="mt-1 truncate font-mono text-2xl font-semibold tracking-tight text-foreground">{value}</p>
-          <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">{detail}</p>
+          <p className="truncate text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.2em]">{label}</p>
+          <p className="mt-0.5 truncate font-mono text-lg font-semibold tracking-tight text-foreground sm:mt-1 sm:text-2xl">{value}</p>
+          <p className="mt-0.5 truncate font-mono text-[8px] text-muted-foreground sm:mt-1 sm:text-[10px]">{detail}</p>
         </div>
       </div>
     </div>
@@ -121,7 +121,7 @@ export function FlightIndicators({ data }: { data: TelemetryData }) {
   const altitudePercent = clamp(Math.abs(data.altitude) / 3)
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
       <MetricCard
         label="Energía"
         value={`${Math.round(data.battery)}%`}
