@@ -38,6 +38,15 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
     setDarkMode(dark)
   }, [])
 
+  useEffect(() => {
+    if (!mobileOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [mobileOpen])
+
   const toggleTheme = () => {
     const dark = !darkMode
     document.documentElement.classList.toggle("dark", dark)
@@ -51,8 +60,9 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-2 px-3 md:gap-6 md:px-6">
+    <>
+      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-2 px-3 md:gap-6 md:px-6">
         <div className="flex shrink-0 items-center gap-2.5 sm:min-w-[180px] sm:gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/api/brand-logo" alt="" className="h-8 w-8 rounded-full bg-white object-cover ring-1 ring-primary/30" />
@@ -116,37 +126,38 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
             <Menu className="h-4 w-4" />
           </button>
         </div>
-      </div>
+        </div>
+      </header>
 
       {mobileOpen && (
-        <div className="fixed inset-0 top-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[100] isolate md:hidden">
           <button
             type="button"
             aria-label="Cerrar navegación"
-            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            className="absolute inset-0 z-0 bg-slate-950/70"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-[82vw] max-w-xs flex-col border-r border-primary/20 bg-background shadow-2xl">
-            <div className="flex h-16 items-center justify-between border-b border-border px-4">
+          <aside className="fixed inset-y-0 left-0 z-10 flex h-dvh w-[86vw] max-w-sm flex-col overflow-hidden border-r border-blue-200 bg-white text-slate-950 shadow-2xl dark:border-blue-950 dark:bg-slate-950 dark:text-slate-50">
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-950">
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/api/brand-logo" alt="" className="h-9 w-9 rounded-full bg-white object-cover ring-2 ring-primary/30" />
                 <div>
                   <p className="text-sm font-bold tracking-[0.15em] text-primary">DRON-CRoD</p>
-                  <p className="text-[10px] text-muted-foreground">Centro de operaciones</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">Centro de operaciones</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Cerrar navegación"
-                className="grid h-8 w-8 place-items-center rounded-full border border-border"
+                className="grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <nav className="flex-1 space-y-2 p-3">
+            <nav className="flex-1 space-y-2 overflow-y-auto bg-white p-3 dark:bg-slate-950">
               {TABS.map((tab) => {
                 const Icon = tab.icon
                 const active = currentView === tab.id
@@ -159,7 +170,7 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
                       "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition",
                       active
                         ? "border-primary/30 bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                        : "border-transparent bg-muted/45 hover:border-primary/20 hover:bg-primary/8",
+                        : "border-slate-200 bg-slate-100 hover:border-primary/30 dark:border-slate-800 dark:bg-slate-900",
                     )}
                   >
                     <span className={cn("grid h-10 w-10 place-items-center rounded-lg", active ? "bg-white/15" : "bg-primary/10 text-primary")}>
@@ -167,7 +178,7 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
                     </span>
                     <span>
                       <span className="block text-sm font-semibold">{tab.label}</span>
-                      <span className={cn("block text-[11px]", active ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                      <span className={cn("block text-[11px]", active ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-400")}>
                         {tab.description}
                       </span>
                     </span>
@@ -176,8 +187,8 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
               })}
             </nav>
 
-            <div className="border-t border-border p-4">
-              <div className="flex items-center justify-between rounded-xl bg-muted/50 px-3 py-2.5">
+            <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex items-center justify-between rounded-xl bg-slate-100 px-3 py-2.5 dark:bg-slate-900">
                 <span className="text-xs font-medium">Enlace MAVLink</span>
                 <span className={cn("flex items-center gap-2 font-mono text-[10px]", telemetry.data.connection === "connected" ? "text-emerald-500" : "text-red-500")}>
                   <span className={cn("h-2 w-2 rounded-full", telemetry.data.connection === "connected" ? "bg-emerald-500" : "animate-pulse bg-red-500")} />
@@ -188,6 +199,6 @@ export function Navigation({ currentView, onViewChange, telemetry }: NavigationP
           </aside>
         </div>
       )}
-    </header>
+    </>
   )
 }

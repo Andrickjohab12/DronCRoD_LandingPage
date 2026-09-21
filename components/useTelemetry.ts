@@ -165,7 +165,13 @@ export function useTelemetry() {
     let retry: number | null = null
     let poll: number | null = null
     const host = window.location.hostname || "127.0.0.1"
-    const configuredWsUrl = process.env.NEXT_PUBLIC_TELEMETRY_WS_URL?.trim()
+    const queryWsUrl = new URLSearchParams(window.location.search).get("telemetry_ws")?.trim()
+    if (queryWsUrl?.startsWith("wss://")) {
+      localStorage.setItem("droncrod-telemetry-ws", queryWsUrl)
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`)
+    }
+    const savedWsUrl = localStorage.getItem("droncrod-telemetry-ws")?.trim()
+    const configuredWsUrl = queryWsUrl || process.env.NEXT_PUBLIC_TELEMETRY_WS_URL?.trim() || savedWsUrl
     const isSecurePage = window.location.protocol === "https:"
     const wsUrl =
       configuredWsUrl && (!isSecurePage || configuredWsUrl.startsWith("wss://"))

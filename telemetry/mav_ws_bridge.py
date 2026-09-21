@@ -22,6 +22,7 @@ init(autoreset=True)
 
 BAUD_RATE = 57600
 WS_PORT = 8766
+PUBLIC_WS_PORT = 8768
 HTTP_PORT = 8767
 BROADCAST_HZ = 5.0
 LINK_TIMEOUT_S = 2.0
@@ -662,9 +663,9 @@ async def broadcast(message: dict[str, Any]) -> None:
         clients.discard(client)
 
 
-async def ws_handler(websocket) -> None:
+async def ws_session(websocket, *, allow_commands: bool, label: str) -> None:
     clients.add(websocket)
-    add_log("info", f"Dashboard conectado ({len(clients)})")
+    add_log("info", f"Dashboard {label} conectado ({len(clients)})")
     snap = {k: v for k, v in telemetry.items() if k != "logs"}
     snap["logs"] = list(logs)[-80:]
     try:
@@ -674,12 +675,20 @@ async def ws_handler(websocket) -> None:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            if msg.get("type") == "command":
+            if allow_commands and msg.get("type") == "command":
                 command_queue.append(msg)
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
         clients.discard(websocket)
+
+
+async def ws_handler(websocket) -> None:
+    await ws_session(websocket, allow_commands=True, label="local")
+
+
+async def public_ws_handler(websocket) -> None:
+    await ws_session(websocket, allow_commands=False, label="web (solo lectura)")
 
 
 def telemetry_snapshot() -> dict[str, Any]:
@@ -730,8 +739,12 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     start_http_server()
     threading.Thread(target=reader, name="mavlink", daemon=True).start()
-    async with websockets.serve(ws_handler, "0.0.0.0", WS_PORT):
+    async with (
+        websockets.serve(ws_handler, "0.0.0.0", WS_PORT),
+        websockets.serve(public_ws_handler, "127.0.0.1", PUBLIC_WS_PORT),
+    ):
         add_log("ok", f"WebSocket listo en ws://127.0.0.1:{WS_PORT}")
+        add_log("ok", f"WebSocket web (solo lectura) en ws://127.0.0.1:{PUBLIC_WS_PORT}")
         await asyncio.Future()
 
 
