@@ -165,7 +165,15 @@ export function useTelemetry() {
     let retry: number | null = null
     let poll: number | null = null
     const host = window.location.hostname || "127.0.0.1"
-    const wsUrl = `ws://${host}:8766`
+    const configuredWsUrl = process.env.NEXT_PUBLIC_TELEMETRY_WS_URL?.trim()
+    const isSecurePage = window.location.protocol === "https:"
+    const wsUrl =
+      configuredWsUrl && (!isSecurePage || configuredWsUrl.startsWith("wss://"))
+        ? configuredWsUrl
+        : isSecurePage
+          ? null
+          : `ws://${host}:8766`
+    const canReachLocalBridge = !isSecurePage
 
     const pullHttp = async () => {
       try {
@@ -181,9 +189,19 @@ export function useTelemetry() {
     }
 
     const connect = () => {
-      if (cancelled) return
+      if (cancelled || !wsUrl) {
+        setWsState("off")
+        return
+      }
       setWsState("connecting")
-      const ws = new WebSocket(wsUrl)
+      let ws: WebSocket
+      try {
+        ws = new WebSocket(wsUrl)
+      } catch {
+        setWsState("off")
+        setData((prev) => ({ ...EMPTY, logs: prev.logs }))
+        return
+      }
       wsRef.current = ws
       ws.onopen = () => {
         if (cancelled) return
@@ -216,8 +234,10 @@ export function useTelemetry() {
     }
 
     connect()
-    void pullHttp()
-    poll = window.setInterval(pullHttp, 400)
+    if (canReachLocalBridge) {
+      void pullHttp()
+      poll = window.setInterval(pullHttp, 400)
+    }
     const freshness = window.setInterval(() => {
       setData((prev) => {
         if (
