@@ -1,0 +1,14 @@
+captures/
+logs/
+.runtime/
+faces/
+models/*.weights
+models/*.onnx
+models/*.part
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.idea/
+.vscode/

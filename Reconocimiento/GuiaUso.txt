@@ -1,0 +1,320 @@
+RECONOCIMIENTO
+Guía de uso
+Versión 2.4.0
+
+
+1. Qué hace la aplicación
+-------------------------
+Abre la webcam o el video HDMI de tus Fat Shark Recon HD, detecta personas y rostros en tiempo real, les asigna un
+número de objetivo (OBJ #1, OBJ #2, ...) y, si el rostro coincide con una
+foto de la carpeta faces/, muestra el nombre (por ejemplo ANDRICK).
+
+Cuando entra una persona nueva a escena, el sistema:
+  - toma una foto con las cajas dibujadas
+  - graba un clip de unos 4 segundos (2 s antes + 2 s después)
+  - guarda un archivo JSON con fecha, recuentos e identidad
+  - emite un pitido
+
+
+2. Requisitos
+-------------
+  - Windows 10 o 11
+  - Webcam (integrada o USB), o tarjeta de captura HDMI para los goggles
+  - Python 3.14 o compatible, con las librerías de requirements.txt
+  - Cerrar Zoom, Teams, Skype u otra app que esté usando la cámara
+
+La primera vez que se ejecuta, si faltan modelos, se descargan solos
+(YOLOv4-tiny, YuNet y SFace) a la carpeta models/.
+
+
+3. Cómo iniciar
+---------------
+Opción A — webcam de la laptop, doble clic:
+    iniciar.bat
+
+Opción B — cámara analógica + SkyDroid 5.8G OTG (USB):
+    iniciar-analog.bat
+
+Opción C — Fat Shark Recon HD / Avatar (video HDMI):
+    iniciar-goggles.bat
+
+Opción D — terminal, desde esta carpeta:
+    python main.py
+    python main.py --source analog
+    python main.py --source goggles
+    python main.py --list-cameras
+
+Si existe la carpeta .venv, los .bat usan ese Python automáticamente.
+
+Al arrancar verás una pantalla de carga ("Iniciando sistema..." y luego
+"Abriendo cámara..."). En unos segundos aparece el video en vivo.
+
+
+4. La ventana en vivo
+---------------------
+Arriba:
+  - punto rojo parpadeante + EN VIVO  (o PAUSA si deteniste el video)
+  - FPS y backend (CPU o CUDA)
+  - EN ESCENA: personas detectadas en este momento
+  - UNICOS: personas distintas vistas en esta sesión
+  - EVT: eventos guardados en esta sesión
+  - GALERIA: identidades cargadas desde faces/
+
+Sobre la imagen:
+  - caja cian  = persona con ID (OBJ #N)
+  - caja ámbar = rostro aún no identificado (DESCONOCIDO)
+  - caja verde = identidad reconocida (ANDRICK  87%)
+  - caja roja  = objetivo recién confirmado
+
+Abajo:
+  - fecha, hora, nombre de ubicación y tiempo de sesión
+  - coordenadas GPS si las configuraste
+  - teclas de atajo y el último archivo guardado
+
+
+5. Teclas
+---------
+  Q  o  Esc     Salir y cerrar la cámara
+  S             Captura manual (foto + JSON, sin clip automático)
+  Espacio       Pausar / reanudar el video
+  G             Abrir la galería de eventos en el navegador
+  R             Recargar las fotos de faces/ sin reiniciar
+  M             Encender o apagar el audio
+  C             Abrir / cerrar la lista de cámaras
+  0-9           Elegir cámara (con la lista abierta)
+
+En la ventana hay un botón CAMARA. Clic para ver las webcams
+disponibles; clic en una fila para cambiar sin reiniciar.
+
+
+6. Enrolar identidades (quién es quién)
+---------------------------------------
+El nombre sale del archivo o de la carpeta:
+
+    faces/Andrick.jpg           →  Andrick
+    faces/Maria.png             →  Maria
+    faces/Andrick/foto2.jpg     →  Andrick   (la carpeta es el nombre)
+
+Formatos aceptados: .jpg  .jpeg  .png  .webp  .bmp
+
+Consejos para que reconozca bien:
+  - Una cara grande, de frente, bien iluminada
+  - Misma luz que la webcam (si te marca DESCONOCIDO, agrega otra foto
+    tomada con esa cámara)
+  - Si hay varias caras en la foto, usa la más grande
+
+Ya está enrolado faces/Andrick.jpg. Para agregar a alguien más:
+  1. Copia la foto a faces/ con el nombre de la persona
+  2. Pulsa R en la ventana en vivo  (o reinicia la app)
+
+Si te marca DESCONOCIDO siendo una persona enrolada, baja el umbral:
+
+    python main.py --id-threshold 0.30
+
+
+7. Eventos y galería
+--------------------
+Todo se guarda en captures/:
+
+    Andrick_20260910_160000_ab12cd34ef.jpg     foto del evento
+    Andrick_20260910_160000_ab12cd34ef.json    metadatos
+    Andrick_20260910_160000_ab12cd34ef.mp4     clip (si aplica)
+    session_XXXXXXXX.jsonl                     bitácora de la sesión
+    index.html                                 galería web
+
+Tipos de evento:
+  - nuevo_objetivo   primera vez que se confirma a esa persona en escena
+  - identidad        el mismo objetivo acaba de ser reconocido por nombre
+  - manual           pulsas S
+
+Pulsa G para abrir captures/index.html. También puedes abrir ese archivo
+directamente en el navegador.
+
+
+8. Opciones de arranque
+-----------------------
+    python main.py --camera 1
+        Usa otra cámara (0 = integrada, 1 = USB, etc.)
+
+    python main.py --conf 0.50
+        Sube o baja la sensibilidad de YOLO (0 a 1). Default 0.45
+
+    python main.py --id-threshold 0.32
+        Umbral de coincidencia facial (0 a 1). Default 0.35
+        Más bajo = reconoce más fácil, más riesgo de confundir personas
+        Más alto = más estricto
+
+    python main.py --no-identity
+        Solo detecta y asigna IDs, no compara contra faces/
+
+    python main.py --no-faces
+        Solo cuerpo/persona, sin detector de rostros
+
+    python main.py --no-clips
+        No graba video alrededor del evento
+
+    python main.py --mute
+        Sin pitidos
+
+    python main.py --width 640 --height 480
+        Resolución de captura (default 1280 x 720)
+
+    python main.py --source analog
+        Receptor SkyDroid 5.8G OTG (cámara analógica por USB)
+
+    python main.py --source analog --camera 1
+        Fuerza el índice del SkyDroid si hay varias cámaras
+
+    python main.py --source goggles
+        Video de los Fat Shark vía tarjeta de captura HDMI
+
+    python main.py --source goggles --camera 1
+        Fuerza el índice de la tarjeta HDMI (no cae a la webcam)
+
+    python main.py --device "USB Video"
+        Abre la captura por nombre DirectShow
+
+    python main.py --list-cameras
+        Lista webcams y tarjetas HDMI y sale
+
+    python main.py --fourcc yuy2
+        Fuerza el formato (HDMI barato suele ser yuy2, no MJPG)
+
+
+9. Ubicación (opcional, por ejemplo un dron)
+--------------------------------------------
+En CMD, antes de iniciar:
+
+    set LOCATION_NAME=Base norte
+    set DRONE_LAT=19.432608
+    set DRONE_LON=-99.133209
+    set DRONE_ALT=35.5
+    python main.py
+
+Esos valores aparecen en el HUD y se escriben en cada JSON.
+
+
+10. Cámara analógica + SkyDroid 5.8G OTG
+----------------------------------------
+Sí: este receptor entra a la laptop por USB y Windows lo ve como una
+cámara (UVC). No hace falta capturadora HDMI.
+
+    Cámara analógica del dron
+        → VTX analógico 5.8 GHz
+        → SkyDroid 5.8G OTG Receiver
+        → USB de la laptop
+        → esta app  (--source analog)
+
+Pasos:
+  1. Enchufa el SkyDroid al USB de la laptop y espera el driver.
+  2. Cierra la app Cámara / OBS si lo están usando.
+  3. python main.py --list-cameras
+     (debe aparecer USB Camera / SkyDroid / USB Video, no solo
+     Integrated Webcam)
+  4. iniciar-analog.bat
+     o:  python main.py --source analog
+     o:  python main.py --source analog --camera 1
+
+La imagen analógica es 4:3 y más ruidosa que Avatar HD. El
+reconocimiento de caras funciona peor de lejos o con nieve en la
+señal; la detección de persona (YOLO) suele aguantar mejor.
+
+
+11. Fat Shark Recon HD / Avatar HD (IMPORTANTE)
+-----------------------------------------------
+Tu laptop NO entiende el protocolo Avatar HD. No se enchufa el VTX ni
+los goggles como si fueran una webcam. El video digital llega a los
+Recon HD por radio; de ahí sale una copia por HDMI (USB-C de los
+goggles) y esa copia es la que procesa esta app.
+
+Cadena correcta:
+
+    Cámara del dron
+        → VTX Avatar (en el dron)
+        → radio 5.8 GHz
+        → Fat Shark Recon HD (tú ves la imagen)
+        → USB-C de los goggles  (HDMI OUT, no es USB de datos)
+        → cable / adaptador USB-C a HDMI
+        → tarjeta de captura HDMI a USB
+        → puerto USB de la laptop
+        → esta app  (--source goggles)
+
+Qué tienes que comprar si no lo tienes (barato, ~20-30 USD el par):
+  1. Cable o adaptador USB-C a HDMI  (USB-C 3.1, que saque video;
+     un cable de carga no sirve).
+  2. Tarjeta de captura HDMI a USB (USB Video / HDMI Game Capture).
+     Sirve una genérica de 1080p30. Elgato Cam Link es más estable
+     si quieres gastar más.
+
+Orden de encendido (si lo inviertes, los goggles apagan el HDMI):
+  1. Enchufa la tarjeta de captura a la laptop.
+  2. USB-C de los goggles → HDMI → entrada de la tarjeta.
+  3. En los goggles: frame rate Standard (60 Hz). High/100 Hz
+     casi ninguna captura lo acepta.
+  4. Enciende la captura / deja que Windows la instale.
+  5. AL FINAL enciende los goggles.
+  6. Enciende el dron / VTX y espera imagen en los goggles.
+  7. Ejecuta iniciar-goggles.bat
+     o:  python main.py --source goggles
+
+La primera vez, lista dispositivos:
+
+    python main.py --list-cameras
+
+Si ves "USB Video", "HDMI", "Capture", "Cam Link", ese es el índice.
+Luego:
+
+    python main.py --source goggles --camera 1
+
+iniciar-goggles.bat intenta adivinar la tarjeta HDMI y NO se cae
+a la webcam de la laptop si la captura falla.
+
+Prueba rápida sin la app: app Cámara de Windows u OBS → fuente
+"Video Capture Device" → USB Video. Si ahí hay imagen, la app también.
+
+
+12. Problemas frecuentes
+------------------------
+No abre la cámara
+    Cierra Zoom, Teams, Skype o el navegador si está usando la webcam.
+    Windows: Configuración → Privacidad → Cámara → permite el acceso.
+    Prueba:  python main.py --camera 1
+    Lista:   python main.py --list-cameras
+
+No abre el SkyDroid
+    Debe verse como cámara USB. Cierra OBS / app Cámara.
+    python main.py --list-cameras
+    python main.py --source analog --camera 1
+
+No abre el video de los goggles
+    El PC no se conecta por Avatar: hace falta HDMI + captura USB.
+    Enciende la captura ANTES que los goggles.
+    Frame rate Standard (60 Hz), no High.
+    El USB-C de los Recon HD es salida de video, no un pendrive.
+    Windows debe mostrar un dispositivo tipo "USB Video".
+    Fuerza índice:  python main.py --source goggles --camera 1
+    Prueba formato: python main.py --source goggles --fourcc yuy2
+
+Dice que faltan librerías
+    pip install -r requirements.txt
+    o usa iniciar.bat (toma el Python de .venv si existe)
+
+Me marca DESCONOCIDO y soy yo
+    Agrega una segunda foto tuya a faces/ (luz de la webcam) y pulsa R.
+    O baja el umbral:  python main.py --id-threshold 0.30
+
+Detecta poco o nada
+    Mejora la luz. Baja el umbral YOLO:  python main.py --conf 0.30
+
+La ventana va lenta
+    Es normal en CPU. Baja resolución:  python main.py --width 640 --height 480
+
+El registro de la consola se guarda también en logs/app.log
+
+
+13. Entrega / sistema limpio
+----------------------------
+captures/ empieza vacío (solo index.html).
+faces/Andrick.jpg es la identidad de demostración.
+Los modelos en models/ ya están descargados; no hace falta internet
+para usar la app, salvo que borres esos archivos.

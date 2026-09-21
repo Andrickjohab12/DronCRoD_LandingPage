@@ -1,0 +1,309 @@
+RECONOCIMIENTO
+Funcionamiento interno
+Versión 2.4.0
+
+
+1. Propósito
+------------
+Es un sistema local de vigilancia visual. No envía imágenes a internet
+(salvo la primera descarga de modelos). Todo corre en la laptop:
+
+  webcam o HDMI (goggles)  →  detección  →  seguimiento  →  identidad  →  HUD  →  archivo
+
+
+2. Arquitectura
+---------------
+Punto de entrada:
+    main.py                  añade la carpeta del proyecto al path
+    reconocimiento/__main__.py
+                             lee argumentos, configura logs, crea Settings
+                             y lanza RecognitionApp
+
+Núcleo:
+    app.py                   bucle principal, teclas, disparo de eventos
+    camera.py                webcam o captura HDMI (Fat Shark / Avatar)
+                             en un hilo; --source goggles no cae a la webcam
+    detector.py              YOLO personas + YuNet rostros, en otro hilo
+    identity.py              SFace: compara el rostro contra faces/
+    tracker.py               IoU tracker: ID estable por persona
+    hud.py                   dibuja cajas, textos y estados
+    capture.py               guarda JPG + JSON y actualiza la galería
+    clips.py                 buffer circular y MP4 de ~4 s
+    gallery.py               regenera captures/index.html
+    alerts.py                pitido en hilo aparte (winsound)
+    download.py              baja modelos si faltan
+    config.py                rutas, umbrales y variables de entorno
+    detections.py            estructura Detection (caja, label, score)
+
+Carpetas:
+    faces/                   fotos de enrolamiento (quién es quién)
+    models/                  pesos de las redes (YOLO, YuNet, SFace)
+    captures/                eventos de esta y otras sesiones
+    logs/                    app.log
+
+
+3. Arranque, paso a paso
+------------------------
+1) Se crea un session_id de 8 caracteres hex. Toda la sesión comparte
+   ese id en los JSON y en el archivo session_XXXXXXXX.jsonl.
+
+2) Se abre una ventana OpenCV 1280x720 y se muestra "Iniciando sistema".
+
+3) HumanDetector carga tres piezas:
+      a) Personas: YOLOv4-tiny (Darknet) a 416x416.
+         Si falla, usa HOG de OpenCV (más lento, menos preciso).
+         Si hay GPU CUDA, la usa; si no, CPU.
+      b) Rostros: YuNet (ONNX). Si falla, Haar Cascade.
+      c) Identidad: IdentityEngine con SFace (ONNX).
+         Recorre faces/, detecta el rostro de cada foto, alinea,
+         extrae un embedding y lo guarda en memoria.
+
+4) ThreadedDetector arranca un hilo daemon. El video nunca se congela
+   esperando a la red: el hilo consume el último frame y publica
+   detecciones cuando termina.
+
+5) CameraStream abre la fuente de video en otro hilo.
+      --source laptop  (default): webcam, prueba MJPG, si fallan
+      índices 0..3.
+      --source goggles: busca una tarjeta HDMI (USB Video, Capture,
+      Cam Link...). No se cae a la webcam de la laptop. Prueba
+      YUY2/auto antes que MJPG (las capturas HDMI baratas no hablan
+      MJPG). Espera hasta 5 s el handshake HDMI.
+      El PC no decodifica Avatar HD: recibe el HDMI OUT de los
+      Recon HD a través de un capture USB. Ver GuiaUso.txt.
+      --source analog: SkyDroid 5.8G OTG (USB UVC). 720x480, YUY2.
+      Tampoco se cae a la webcam integrada.
+
+6) rebuild_gallery() deja captures/index.html listo.
+
+7) Entra el bucle de video.
+
+
+4. El bucle en vivo
+-------------------
+Cada iteración (si no está en pausa):
+
+  1. Lee el último frame del hilo de cámara.
+  2. Lo envía al detector asíncrono (solo se guarda el más reciente;
+     si la red va lenta, se descartan frames intermedios).
+  3. Si hay un resultado nuevo (cambió el número de secuencia):
+        tracker.update(detecciones)
+        → lista para dibujar
+        → tracks recién confirmados  (evento nuevo_objetivo)
+        → tracks que acaban de recibir nombre  (evento identidad)
+  4. Empuja el frame al buffer de clips.
+  5. Dibuja el HUD sobre una copia del frame.
+  6. Si hay eventos, guarda archivos y suena el aviso.
+  7. imshow + waitKey(1) para teclas.
+
+La pausa (Espacio) congela el último frame. El detector y la cámara
+siguen existiendo, pero no se procesa video nuevo.
+
+
+5. Detección de personas (YOLO)
+-------------------------------
+Red: YOLOv4-tiny, clases COCO. Solo se conserva class_id 0 (person).
+
+    confThreshold  = Settings.confidence     default 0.45
+    nmsThreshold   = 0.4
+    entrada        = 416 x 416, RGB, /255
+
+Salida: cajas (x, y, w, h) recortadas al tamaño del frame.
+
+Respaldo HOG: reduce el ancho a 480 px, detectMultiScale, y reescala
+las cajas al tamaño original. Se usa solo si YOLO no carga.
+
+
+6. Detección de rostros (YuNet)
+-------------------------------
+YuNet recibe el frame a su resolución real (setInputSize(w, h)).
+Devuelve caja + landmarks (ojos, nariz, comisuras) + score.
+
+Esos landmarks importan: SFace alinea el rostro con alignCrop antes
+de calcular el embedding. Sin landmarks, se recorta la caja y se
+reescala a 112x112 (peor calidad).
+
+Si no hay personas YOLO pero sí hay rostros, el tracker trata esos
+rostros como "personas" para no perder el objetivo de cerca.
+
+
+7. Identidad (SFace)
+--------------------
+Enrolamiento (al iniciar o al pulsar R):
+  - Recorre faces/ de forma recursiva.
+  - Nombre = nombre del archivo (Andrick.jpg → Andrick)
+    o nombre de la carpeta (faces/Andrick/foto2.jpg → Andrick).
+  - Detecta rostros en la foto; si hay varios, toma el más grande.
+  - alignCrop + feature → vector. Una persona puede tener varios
+    vectores (varias fotos).
+
+Comparación en vivo:
+  - Del rostro detectado se saca otro vector.
+  - Se compara con todos los de la galería (coseno, FaceRecognizerSF).
+  - Gana el mayor score.
+  - Si score >= identity_threshold (default 0.35) → ese nombre.
+  - Si no → DESCONOCIDO (el HUD no pone nombre).
+
+El umbral 0.35 es deliberadamente permisivo para webcam de laptop.
+Bajarlo (0.30) reconoce más fácil; subirlo reduce falsos positivos.
+
+reload() no relée si no cambió la firma (ruta + fecha + tamaño).
+R fuerza una recarga cuando agregas fotos con la app abierta.
+
+
+8. Seguimiento (IoU tracker)
+----------------------------
+No es DeepSORT ni usa apariencia. Relaciona cajas de un frame con
+las del anterior por Intersección sobre Unión (IoU >= 0.3).
+
+Reglas:
+  - Un track nuevo nace por cada detección de persona no emparejada.
+  - IDs correlativos desde 1, solo durante la sesión (al reiniciar
+    vuelven a #1).
+  - Se confirma tras 3 aciertos seguidos (track_min_hits).
+    Así se evitan destellos de un solo frame.
+  - Si desaparece más de 1.8 s, se borra.
+    Si la misma persona vuelve después, recibe un ID nuevo.
+  - El rostro se asocia a un track si el centro del rostro cae
+    dentro de la caja de la persona. El nombre se copia al track
+    si el score es mejor que el que ya tenía.
+
+Eventos que dispara el tracker (una sola vez por track):
+
+  nuevo_objetivo
+      El track acaba de confirmarse (3 hits). Aunque aún no tenga
+      nombre, ya es un humano estable en escena.
+
+  identidad
+      El track ya estaba confirmado y ahora acaba de obtener nombre
+      (el rostro se vio bien un poco después). No se dispara si el
+      nombre ya existía en el momento de confirmar.
+
+Esto explica por qué a veces hay dos archivos: primero "persona_..."
+y luego "Andrick_..." cuando SFace reconoce la cara.
+
+
+9. HUD
+------
+Se dibuja sobre una copia del frame, nunca sobre el buffer crudo
+de la cámara.
+
+  Verde   identidad conocida + porcentaje de coincidencia
+  Cian    persona con ID, aún sin nombre
+  Ámbar   rostro desconocido
+  Rojo    objetivo recién destacado (unos 2.4 s)
+
+Textos del overlay: EN VIVO / PAUSA, FPS, backend, EN ESCENA,
+UNICOS, EVT, GALERIA, fecha, ubicación, GPS, atajos.
+
+Al guardar un evento hay un flash blanco corto (0.18 s).
+
+
+10. Persistencia de un evento
+-----------------------------
+CaptureStore.save() escribe:
+
+  JPG   calidad 92, con el HUD ya dibujado (lo que ves es lo que
+        se archiva).
+
+  JSON  id, session_id, event_type, track_id, fecha/hora,
+        location / lat / lon / alt, source, people_count,
+        faces_count, identity, identities[], detections[]
+        (tipo, track_id, identity, identity_score, bbox, confidence),
+        image_file, video_file.
+
+  Nombre del archivo:
+        {identidad|persona|desconocido|escena}_{AAAAMMDD_HHMMSS}_{id}.jpg
+
+  jsonl  una línea más en session_{session_id}.jsonl
+
+Luego rebuild_gallery() regenera index.html (hasta 200 tarjetas,
+la más reciente primero).
+
+Si enable_clips está activo, ClipRecorder:
+  - mantiene un buffer JPEG de los últimos ~2 s a 12 fps
+  - al evento, vuelca el buffer a MP4 (codec mp4v; si falla, AVI/MJPG)
+  - sigue escribiendo ~2 s más
+  - attach_video() pone el nombre del video en el JSON
+
+
+11. Audio
+---------
+notify_new_target() lanza un hilo:
+  - con identidad:  tres tonos ascendentes (880, 1175, 1568 Hz)
+  - sin identidad:  dos tonos (980, 1310 Hz)
+  - M o --mute lo apaga
+
+
+12. Hilos y por qué no se traba la ventana
+------------------------------------------
+  hilo principal     dibuja, teclado, decide eventos
+  hilo camera        cap.read() continuo, un frame en memoria
+  hilo detector      YOLO + YuNet + SFace sobre el último frame
+  hilo audio         beep, no bloquea el FPS
+
+El detector no encola frames: submit() pisa el anterior. El FPS del
+HUD es el de dibujo, no el de inferencia. detect_fps en Settings
+(12) documenta la intención; el ritmo real lo marca lo que tarde
+la red en CPU/GPU.
+
+
+13. Configuración
+-----------------
+Defaults (config.py y variables de entorno):
+
+  CAMERA_INDEX          0
+  CONF_THRESHOLD        0.45
+  IDENTITY_THRESHOLD    0.35
+  CAPTURE_COOLDOWN      8.0     (reservado; el disparo real lo decide
+                                 el tracker, no un temporizador)
+  LOCATION_NAME         Laptop / Webcam local
+  DRONE_LAT / LON / ALT 0
+  camera_width/height   1280 x 720
+  track_min_hits        3
+  track_max_missing_s   1.8
+  track_iou             0.3
+  clip_pre_s / post_s   2.0 / 2.0
+  clip_fps              12
+
+Flags de línea de comandos: ver GuiaUso.txt sección 8.
+
+
+14. Modelos
+-----------
+    models/yolov4-tiny.cfg
+    models/yolov4-tiny.weights              (~23 MB, GitHub AlexeyAB)
+    models/face_detection_yunet_2023mar.onnx
+    models/face_recognition_sface_2021dec.onnx   (~37 MB)
+
+download.py usa HTTPS. Si el certificado falla, reintenta sin
+verificar SSL. Rechaza archivos de menos de 10 KB.
+
+OpenCV debe ser 4.x (requirements.txt: opencv-python>=4.8.0,<5).
+OpenCV 5 eliminó readNetFromDarknet, HOGDescriptor y
+CascadeClassifier, y esta app los usa.
+
+
+15. Límites (importante para quien reciba el sistema)
+-----------------------------------------------------
+  - No es un sistema forense ni de control de acceso certificado.
+  - El ID de tracking no es una identidad permanente: se pierde al
+    salir de escena o al reiniciar.
+  - SFace con una sola foto de galería falla con lentes, perfil,
+    contraluz o cara tapada.
+  - YOLO-tiny pierde personas muy lejanas o muy tapadas.
+  - Todo corre en local; no hay servidor ni base de datos.
+  - Los embeddings viven solo en RAM mientras la app está abierta.
+
+
+16. Flujo resumido de un humano que entra
+-----------------------------------------
+  Frame N     YOLO ve una caja. Track #3 nace. hits = 1
+  Frame N+1   IoU empareja. hits = 2
+  Frame N+2   hits = 3 → confirmado → evento nuevo_objetivo
+              foto + clip + JSON + pitido
+  Frame N+k   YuNet ve la cara, SFace dice Andrick 0.71
+              el track guarda el nombre
+              si el nombre llegó DESPUÉS de confirmar:
+                  evento identidad (segunda foto)
+              el HUD pasa de OBJ #3 a ANDRICK en verde

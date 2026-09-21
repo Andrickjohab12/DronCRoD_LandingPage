@@ -1,86 +1,108 @@
 "use client"
 
 import type { ViewType } from "@/components/drone-layout"
-import { Clock, CloudSun, Gauge, Video, Map, ImageIcon } from "lucide-react"
+import { Clock, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
+import { cn } from "@/lib/utils"
+import type { TelemetryState } from "@/components/useTelemetry"
 
 interface NavigationProps {
   currentView: ViewType
   onViewChange: (view: ViewType) => void
+  telemetry: TelemetryState
 }
 
-export function Navigation({ currentView, onViewChange }: NavigationProps) {
-  const [time, setTime] = useState(new Date())
+const TABS: { id: ViewType; label: string }[] = [
+  { id: "monitor", label: "Monitoreo" },
+  { id: "video", label: "Cámara" },
+  { id: "mission", label: "Misión" },
+]
+
+export function Navigation({ currentView, onViewChange, telemetry }: NavigationProps) {
+  const [time, setTime] = useState("")
+  const [darkMode, setDarkMode] = useState(true)
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date())
-    }, 1000)
+    const format = () =>
+      new Date().toLocaleTimeString("en-GB", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    setTime(format())
+    const timer = setInterval(() => setTime(format()), 1000)
     return () => clearInterval(timer)
   }, [])
 
+  useEffect(() => {
+    const saved = localStorage.getItem("droncrod-theme")
+    const dark = saved ? saved === "dark" : true
+    document.documentElement.classList.toggle("dark", dark)
+    setDarkMode(dark)
+  }, [])
+
+  const toggleTheme = () => {
+    const dark = !darkMode
+    document.documentElement.classList.toggle("dark", dark)
+    localStorage.setItem("droncrod-theme", dark ? "dark" : "light")
+    setDarkMode(dark)
+  }
+
   return (
-    <nav className="border-b border-border/50 bg-gradient-to-r from-white via-blue-50/50 to-white shadow-sm backdrop-blur-sm">
-      <div className="mx-auto flex h-auto min-h-[80px] max-w-[1800px] flex-col items-center justify-between gap-4 px-4 py-4 md:h-20 md:flex-row md:px-8 md:py-0">
-        <div className="flex items-center gap-3 md:gap-4">
-          <div className="gradient-blue glow-blue flex h-12 w-12 items-center justify-center rounded-xl shadow-lg md:h-14 md:w-14">
-            <ImageIcon className="h-6 w-6 text-white md:h-8 md:w-8" />
-          </div>
-          <div>
-            <h1 className="bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-xl font-bold text-transparent md:text-2xl">
-              DronCRoD
-            </h1>
-            <p className="text-xs text-blue-600/70">Sistema de Monitoreo</p>
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-2 px-4 md:gap-6 md:px-6">
+        <div className="flex min-w-[150px] shrink-0 items-center gap-3 sm:min-w-[180px]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/api/brand-logo" alt="" className="h-8 w-8 rounded-full bg-white object-cover ring-1 ring-primary/30" />
+          <div className="min-w-0">
+            <span className="block truncate text-[14px] font-bold tracking-[0.16em] text-primary">DRON-CRoD</span>
+            <span className="hidden text-[10px] tracking-wide text-muted-foreground md:block">Club de Robótica</span>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3">
-          <button
-            onClick={() => onViewChange("monitor")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-300 md:px-6 md:py-3 md:text-sm ${
-              currentView === "monitor"
-                ? "gradient-blue glow-blue scale-105 text-white shadow-lg"
-                : "bg-white/50 text-blue-600/70 shadow-sm hover:scale-105 hover:bg-white hover:text-blue-700"
-            }`}
-          >
-            <Gauge className="h-4 w-4 md:h-5 md:w-5" />
-            Monitoreo
-          </button>
-          <button
-            onClick={() => onViewChange("video")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-300 md:px-6 md:py-3 md:text-sm ${
-              currentView === "video"
-                ? "gradient-blue glow-blue scale-105 text-white shadow-lg"
-                : "bg-white/50 text-blue-600/70 shadow-sm hover:scale-105 hover:bg-white hover:text-blue-700"
-            }`}
-          >
-            <Video className="h-4 w-4 md:h-5 md:w-5" />
-            Video en Vivo
-          </button>
-          <button
-            onClick={() => onViewChange("mission")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-300 md:px-6 md:py-3 md:text-sm ${
-              currentView === "mission"
-                ? "gradient-blue glow-blue scale-105 text-white shadow-lg"
-                : "bg-white/50 text-blue-600/70 shadow-sm hover:scale-105 hover:bg-white hover:text-blue-700"
-            }`}
-          >
-            <Map className="h-4 w-4 md:h-5 md:w-5" />
-            Misión
-          </button>
-        </div>
+        <nav className="flex items-center gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onViewChange(tab.id)}
+              className={cn(
+                "relative px-3 py-2 text-[13px] tracking-wide transition-colors",
+                currentView === tab.id ? "font-medium text-primary" : "text-muted-foreground hover:text-primary",
+              )}
+            >
+              {tab.label}
+              {currentView === tab.id && (
+                <span className="absolute inset-x-2 -bottom-[13px] h-px bg-primary" />
+              )}
+            </button>
+          ))}
+        </nav>
 
-        <div className="flex items-center gap-3 md:gap-6">
-          <div className="flex items-center gap-2 rounded-xl bg-white/70 px-3 py-1.5 shadow-sm backdrop-blur-sm md:gap-3 md:px-4 md:py-2">
-            <CloudSun className="h-4 w-4 text-blue-600 md:h-5 md:w-5" />
-            <span className="text-sm font-semibold text-blue-700 md:text-base"></span>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl bg-white/70 px-3 py-1.5 font-mono shadow-sm backdrop-blur-sm md:gap-3 md:px-4 md:py-2">
-            <Clock className="h-4 w-4 text-blue-600 md:h-5 md:w-5" />
-            <span className="text-sm font-semibold text-blue-700 md:text-base">{time.toLocaleTimeString()}</span>
-          </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 font-mono text-[12px] text-muted-foreground sm:min-w-[130px]">
+          <span
+            className={`hidden items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-semibold tracking-wider lg:inline-flex ${
+              telemetry.data.connection === "connected"
+                ? "border-emerald-500/30 text-emerald-500"
+                : "border-red-500/30 text-red-500"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                telemetry.data.connection === "connected" ? "bg-emerald-500" : "animate-pulse bg-red-500"
+              }`}
+            />
+            {telemetry.data.connection === "connected" ? "MAVLINK" : "OFFLINE"}
+          </span>
+          <Clock className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline" suppressHydrationWarning>{time || "--:--:--"}</span>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={darkMode ? "Activar interfaz clara" : "Activar interfaz oscura"}
+            title={darkMode ? "Tema claro" : "Tema oscuro"}
+            className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent"
+          >
+            {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
         </div>
       </div>
-    </nav>
+    </header>
   )
 }

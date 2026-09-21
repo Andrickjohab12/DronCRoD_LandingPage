@@ -1,463 +1,254 @@
 "use client"
+
 import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { useState, useEffect, useRef } from "react"
+import { AlertTriangle, CheckCircle2, Cpu, RefreshCw, ShieldAlert } from "lucide-react"
+import { ArtificialHorizon, FlightIndicators, HeadingDial } from "./flight-indicators"
+import { TelemetryTerminal } from "./telemetry-terminal"
+import { hasGpsFix, type TelemetryState } from "./useTelemetry"
+import { useWeather } from "./useweather"
 
-import {
-  Battery,
-  Wifi,
-  Satellite,
-  Gauge,
-  MapPin,
-  Clock,
-  Thermometer,
-  Wind,
-  Compass,
-  Radio,
-  Activity,
-  Zap,
-  Cpu,
-  Network,
-  Shield,
-  Play,
-  Pause,
-  Maximize,
-  Droplets,
-  Cloud,
-} from "lucide-react"
-import { useTelemetry } from "./useTelemetry"
-import { useWeather } from "./useweather" // 🌦️ Importa el hook del clima
-
-interface DroneStats {
-  battery: number
-  connection: "connected" | "disconnected" | "weak"
-  satellites: number
-  altitude: number
-  speed: number
-  latitude: number
-  longitude: number
-  flightTime: number
-  temperature: number
-  windSpeed: number
-  heading: number
-  signalStrength: number
+function fmt(n: number, digits = 1, unit = "") {
+  if (!Number.isFinite(n)) return "—"
+  return `${n.toFixed(digits)}${unit ? ` ${unit}` : ""}`
 }
 
-export function MonitorView() {
-  const stats = useTelemetry()
-  const weather = useWeather() // 🌦️ Hook del clima
-  const [elapsedTime, setElapsedTime] = useState(0) // segundos totales
-const timerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-
-
-  const getBatteryColor = (battery: number) => {
-    if (battery > 50) return "text-green-500"
-    if (battery > 20) return "text-yellow-500"
-    return "text-red-500"
-  }
-
-  const getConnectionColor = (connection: string) => {
-    if (connection === "connected") return "text-green-500"
-    if (connection === "weak") return "text-yellow-500"
-    return "text-gray-400"
-  }
-
-  
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-  }
-useEffect(() => {
-  if (isPlaying) {
-    timerRef.current = setInterval(() => {
-      setElapsedTime((prev) => prev + 1)
-    }, 1000)
-  } else if (timerRef.current) {
-    clearInterval(timerRef.current)
-  }
-
-  return () => {
-    if (timerRef.current) clearInterval(timerRef.current)
-  }
-}, [isPlaying])
-
-
-  // refs y estado adicionales para el video
-const [cameraStatus, setCameraStatus] = useState<string>("Esperando conexión...")
-const videoRef = useRef<HTMLVideoElement | null>(null)
-const videoContainerRef = useRef<HTMLDivElement | null>(null)
-
-// Función para entrar/salir fullscreen SOLO del contenedor de video
-const handleFullscreen = () => {
-  if (!document.fullscreenElement) {
-    videoContainerRef.current?.requestFullscreen()
-    setIsFullscreen(true)
-  } else {
-    document.exitFullscreen()
-    setIsFullscreen(false)
-  }
+function uptime(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
 }
 
-// Inicia stream para la cámara "USB2.0 PC CAMERA"
-const startCameraStream = async (deviceId?: string) => {
-  try {
-    const constraints = deviceId
-      ? { video: { deviceId: { exact: deviceId } }, audio: false }
-      : { video: true, audio: false }
-
-    const stream = await navigator.mediaDevices.getUserMedia(constraints)
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream
-      await videoRef.current.play()
-      setIsPlaying(true)
-      setCameraStatus("🎥 Cámara del dron conectada ✅")
-    }
-  } catch (err) {
-    console.error("Error al acceder a la cámara:", err)
-    setCameraStatus("Error al conectar la cámara")
-  }
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="group -mx-2 flex items-baseline justify-between gap-4 border-b border-border/60 px-2 py-2.5 transition-colors last:border-0 hover:bg-primary/5">
+      <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground group-hover:text-primary">
+        <span className="h-1 w-1 rounded-full bg-primary/60" />
+        {label}
+      </span>
+      <span className="font-mono text-[13px] font-semibold text-foreground">{value}</span>
+    </div>
+  )
 }
 
-// Detener stream
-const stopCameraStream = () => {
-  if (videoRef.current && videoRef.current.srcObject) {
-    const tracks = (videoRef.current.srcObject as MediaStream).getTracks()
-    tracks.forEach((t) => t.stop())
-    videoRef.current.srcObject = null
-  }
-  setIsPlaying(false)
-  setCameraStatus("Esperando conexión...")
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card className="group gap-0 overflow-hidden rounded-xl border-border/80 border-l-2 border-l-primary bg-card p-0 py-0 shadow-sm transition hover:border-primary/35 hover:shadow-md">
+      <div className="relative border-b border-primary/15 bg-gradient-to-r from-primary/12 via-primary/5 to-transparent px-4 py-3.5">
+        <div className="absolute bottom-0 left-0 h-px w-16 bg-primary" />
+        <h3 className="text-base font-bold tracking-wide text-foreground">{title}</h3>
+      </div>
+      <div className="px-4 py-2.5">{children}</div>
+    </Card>
+  )
 }
 
-// Auto-detectar y conectar la cámara USB2.0 PC CAMERA al montar
-useEffect(() => {
-  let mounted = true
-  const init = async () => {
-    try {
-      const all = await navigator.mediaDevices.enumerateDevices()
-      const cam = all.find(
-        (d) => d.kind === "videoinput" && d.label.toLowerCase().includes("usb2.0 pc camera")
-      )
-      if (!mounted) return
-      if (cam) {
-        // arranca el stream con el deviceId encontrado
-        await startCameraStream(cam.deviceId)
-      } else {
-        setCameraStatus("🔌 No se detectó la cámara del dron")
-      }
-    } catch (err) {
-      console.error("Error al buscar cámara:", err)
-      setCameraStatus("Error al buscar cámaras")
-    }
-  }
-  init()
-  return () => {
-    mounted = false
-    stopCameraStream()
-  }
-}, [])
-
-
-
+function OperationalStatus({ telemetry }: { telemetry: TelemetryState }) {
+  const data = telemetry.data
+  const disconnected = data.connection !== "connected"
+  const lowBattery = data.battery > 0 && data.battery <= 20
+  const noGps = data.gps_fix < 2
+  const ekfFailure = !data.estimator_ok
+  const critical = disconnected || ekfFailure
+  const warning = !critical && (lowBattery || noGps)
+  const label = critical ? "Atención operativa" : warning ? "Vuelo condicionado" : "Sistema listo"
+  const description = disconnected
+    ? "Enlace MAVLink desconectado. Los comandos de vuelo están deshabilitados."
+    : ekfFailure
+      ? "El estimador EKF reporta una falla. No despegues."
+      : lowBattery
+        ? `Batería baja: ${Math.round(data.battery)}%. Considera aterrizar.`
+        : noGps
+          ? "Sin posición GPS válida. Espera un fix 3D para navegación."
+          : `${data.autopilot || "Autopiloto"} · ${data.flight_mode} · telemetría estable`
 
   return (
-    <div className="mx-auto max-w-[1800px] space-y-4 p-4 md:space-y-6 md:p-8">
-      <div className="flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-blue-50 via-blue-100/50 to-white p-4 shadow-lg md:flex-row md:items-center md:justify-between md:p-6">
-        <div>
-          <h2 className="bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-2xl font-bold text-transparent md:text-3xl">
-            Panel de Monitoreo
-          </h2>
-          <p className="mt-2 text-sm text-blue-600/70">Estadísticas en tiempo real del dron</p>
+    <div
+      className={`flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+        critical
+          ? "border-red-500/30 bg-red-500/8"
+          : warning
+            ? "border-amber-500/30 bg-amber-500/8"
+            : "border-emerald-500/30 bg-emerald-500/8"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`mt-0.5 rounded-lg p-2 ${
+            critical ? "bg-red-500/15 text-red-500" : warning ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500"
+          }`}
+        >
+          {critical ? <ShieldAlert className="h-4 w-4" /> : warning ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
         </div>
-        <div className="flex items-center gap-4 rounded-xl bg-white px-4 py-2 shadow-md md:px-6 md:py-3">
-           <div
-            className={`h-4 w-4 rounded-full ${
-              stats.connection === "connected" ? "bg-blue-500 shadow-lg shadow-blue-500/50" : "bg-gray-400"
-            } animate-pulse`}
-          />
-          <span className="font-mono text-base font-bold text-blue-700 md:text-lg">
-            {stats.connection === "connected" ? "CONECTADO" : "DESCONECTADO"}
+        <div>
+          <p className="text-sm font-semibold text-foreground">{label}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pl-11 font-mono text-[10px] uppercase tracking-[0.16em] sm:pl-0">
+        <span className={`h-2 w-2 rounded-full ${critical ? "animate-pulse bg-red-500" : warning ? "bg-amber-500" : "bg-emerald-500"}`} />
+        {data.armed ? "Aeronave armada" : "Aeronave segura"}
+      </div>
+    </div>
+  )
+}
+
+export function MonitorView({ telemetry }: { telemetry: TelemetryState }) {
+  const stats = telemetry.data
+  const gpsOk = hasGpsFix(stats)
+  const weather = useWeather(gpsOk ? stats.latitude : undefined, gpsOk ? stats.longitude : undefined)
+  const signal = stats.rssi ?? stats.rc_rssi
+  const radioOn = stats.connection === "connected"
+  const linkLabel = radioOn ? "Enlace SiK" : "Desconectado"
+
+  return (
+    <div className="mx-auto max-w-[1600px] space-y-5 px-6 py-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="gcs-kicker">Telemetría</p>
+          <h2 className="mt-1 text-xl font-medium tracking-tight">Consola de vuelo</h2>
+          <div className="brand-rule mt-2 h-px w-32" />
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            {stats.autopilot || "MAVLink"}
+            {stats.firmware ? ` ${stats.firmware}` : ""}
+            {stats.vehicle_type ? ` · ${stats.vehicle_type}` : ""}
+            {stats.port ? ` · ${stats.port}` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+          <button
+            type="button"
+            disabled={!radioOn}
+            onClick={() => telemetry.sendCommand("streams")}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 font-sans text-xs font-semibold text-primary-foreground shadow-md shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90 disabled:opacity-40"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Actualizar
+          </button>
+          <button
+            type="button"
+            disabled={!radioOn}
+            onClick={() => telemetry.sendCommand("version")}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/8 px-3 py-2 font-sans text-xs font-semibold text-primary transition hover:bg-primary/15 disabled:opacity-40"
+          >
+            <Cpu className="h-3.5 w-3.5" />
+            Versión FC
+          </button>
+          <span
+            className={`rounded-lg border px-2.5 py-2 ${
+              stats.armed ? "border-red-500/60 bg-red-500/10 text-red-500" : "border-border text-muted-foreground"
+            }`}
+          >
+            {stats.armed ? "ARMADO" : "DESARMADO"}
+          </span>
+          <span className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-2 font-semibold text-primary">{stats.flight_mode}</span>
+          <span className="inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-muted-foreground">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${radioOn ? "bg-emerald-400" : "bg-red-500"}`}
+            />
+            {linkLabel}
           </span>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
-        <Card className="group relative overflow-hidden border-0 bg-blue-600 p-6 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl md:p-8">
-          <div className="relative flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-100">Batería</p>
-              <p className={`font-mono text-4xl font-bold text-white md:text-5xl ${getBatteryColor(stats.battery)}`}>
-                {stats.battery.toFixed(2)}%
-              </p>
-            </div>
-            <Battery className="h-12 w-12 text-white/80 md:h-16 md:w-16" />
-          </div>
-        </Card>
+      <OperationalStatus telemetry={telemetry} />
 
-        <Card className="group relative overflow-hidden border-0 bg-blue-500 p-6 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl md:p-8">
-          <div className="relative flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-100">Conexión</p>
-              <p className={`font-mono text-4xl font-bold text-white md:text-5xl ${getConnectionColor(stats.connection)}`}>
-                {stats.connection === "connected" ? "OK" : "OFF"}
-              </p>
-            </div>
-            <Wifi className="h-12 w-12 text-white/80 md:h-16 md:w-16" />
-          </div>
-        </Card>
+      <FlightIndicators data={stats} />
 
-        <Card className="group relative overflow-hidden border-0 bg-blue-700 p-6 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl md:p-8">
-          <div className="relative flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-100">Satélites GPS</p>
-                <p className="font-mono text-4xl font-bold text-white md:text-5xl">{stats.satellites}</p>
-            </div>
-            <Satellite className="h-12 w-12 text-white/80 md:h-16 md:w-16" />
+      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+        <Panel title="Instrumentación primaria">
+          <div className="grid place-items-center gap-5 py-3 sm:grid-cols-2">
+            <ArtificialHorizon roll={stats.roll} pitch={stats.pitch} />
+            <HeadingDial heading={stats.heading} />
           </div>
-        </Card>
-
-        <Card className="group relative overflow-hidden border-0 bg-blue-400 p-6 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl md:p-8">
-          <div className="relative flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-100">Tiempo Vuelo</p>
-              <p className="font-mono text-4xl font-bold text-white md:text-5xl"></p>
-            </div>
-            <Clock className="h-12 w-12 text-white/80 md:h-16 md:w-16" />
-          </div>
-        </Card>
+        </Panel>
+        <Panel title="Resumen de vuelo">
+          <Row label="Modo" value={stats.flight_mode} />
+          <Row label="Estado" value={stats.armed ? "ARMADO" : "DESARMADO"} />
+          <Row label="En tierra" value={stats.landed_state} />
+          <Row label="Tiempo FC" value={uptime(stats.uptime_s)} />
+          <Row label="Batería temp." value={stats.battery_temp == null ? "—" : fmt(stats.battery_temp, 1, "°C")} />
+          <Row label="Enlace" value={linkLabel} />
+        </Panel>
       </div>
 
-      <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
-        <Card className="border-0 bg-white p-6 shadow-xl md:p-8">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-xl bg-blue-100 p-3">
-              <Activity className="h-6 w-6 text-blue-600" />
-            </div>
-            <h3 className="text-base font-bold text-foreground md:text-lg">Datos de Vuelo</h3>
-          </div>
-          <div className="space-y-4 md:space-y-5">
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Gauge className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Altitud</span>
-              </div>
-               <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">
-                {stats.altitude.toFixed(2)} m
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Zap className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Velocidad</span>
-              </div>
-              <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">{stats.speed.toFixed(2)} m/s</span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Compass className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Rumbo</span>
-              </div>
-              <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">5°</span>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-0 bg-white p-6 shadow-xl md:p-8">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-xl bg-blue-100 p-3">
-              <MapPin className="h-6 w-6 text-blue-600" />
-            </div>
-            <h3 className="text-base font-bold text-foreground md:text-lg">Posición GPS</h3>
-          </div>
-          <div className="space-y-4 md:space-y-5">
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Latitud</span>
-              </div>
-               <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">
-                {stats.latitude.toFixed(6)}°
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Longitud</span>
-              </div>
-             <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">
-                {stats.longitude.toFixed(6)}°
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Radio className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Señal</span>
-              </div>
-              <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">
-               12%
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-0 bg-white p-6 shadow-xl md:p-8">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-xl bg-blue-100 p-3">
-              <Thermometer className="h-6 w-6 text-blue-600" />
-            </div>
-            <h3 className="text-base font-bold text-foreground md:text-lg">Condiciones</h3>
-          </div>
-          <div className="space-y-4 md:space-y-5">
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Thermometer className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-            <span className="text-sm font-semibold text-foreground md:text-base">
-  Temperatura 
-</span>
-              </div>
-              <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">
-              {weather?.temperature?.toFixed(1)  ?? "Cargando..."}  °C
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Wind className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Viento  y Humedad</span>
-              </div>
-              <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">
-             {weather?.windSpeed?.toFixed(1) ?? "Cargando..."}m/s y  {weather?.humidity?.toFixed(1)  ?? "Cargando..."} %
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Cloud className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Condicion:
-  </span>
-              </div>
-              <span className="font-mono text-lg font-bold text-blue-600 md:text-xl">{weather?.condition ?? "Cargando ubicación..."} 
-</span>
-            </div>
-          </div>
-        </Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Vuelo">
+          <Row label="Groundspeed" value={fmt(stats.speed, 2, "m/s")} />
+          <Row label="Airspeed" value={fmt(stats.airspeed, 2, "m/s")} />
+          <Row label="Ascenso" value={fmt(stats.climb, 2, "m/s")} />
+          <Row label="Throttle" value={`${stats.throttle} %`} />
+          <Row label="Rumbo / COG" value={`${fmt(stats.heading, 0)}° / ${fmt(stats.cog, 0)}°`} />
+        </Panel>
+        <Panel title="Actitud">
+          <Row label="Roll" value={fmt(stats.roll, 1, "°")} />
+          <Row label="Pitch" value={fmt(stats.pitch, 1, "°")} />
+          <Row label="Yaw" value={fmt(stats.yaw, 1, "°")} />
+          <Row label="Vel NED" value={`${fmt(stats.vx, 1)} / ${fmt(stats.vy, 1)} / ${fmt(stats.vz, 1)}`} />
+        </Panel>
+        <Panel title="Posición">
+          <Row label="Latitud" value={gpsOk ? fmt(stats.latitude, 6, "°") : "sin fix"} />
+          <Row label="Longitud" value={gpsOk ? fmt(stats.longitude, 6, "°") : "sin fix"} />
+          <Row label="Señal radio" value={signal == null ? "—" : `${fmt(signal, 0, "%")}`} />
+          <Row label="RSSI remoto" value={stats.remote_rssi == null ? "—" : `${fmt(stats.remote_rssi, 0)}`} />
+          <Row label="TX buffer" value={stats.txbuf == null ? "—" : String(stats.txbuf)} />
+        </Panel>
       </div>
 
-
-
-
-      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-        <div ref={videoContainerRef} className="relative aspect-video bg-gradient-to-br from-slate-900 to-slate-800">
-  {/* video element */}
-  <video
-    ref={videoRef}
-    autoPlay
-    playsInline
-    muted
-    className="h-full w-full object-cover"
-  />
-
-  {/* overlay: cuando no está reproduciendo muestra estado (mantiene estilo) */}
-  {!isPlaying && (
-    <div className="absolute inset-0 flex h-full items-center justify-center">
-      <div className="text-center">
-        <Activity className="mx-auto h-12 w-12 animate-pulse text-blue-400 md:h-16 md:w-16" />
-        <p className="mt-4 font-mono text-base text-blue-300 md:text-lg">
-          {cameraStatus}
-        </p>
-      </div>
-    </div>
-  )}
-
-  {/* Controles inferiores (mantienen tus clases) */}
-  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 md:p-6">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2 md:gap-3">
-        <Button
-          size="lg"
-          onClick={() => {
-            if (isPlaying) {
-              stopCameraStream()
-            } else {
-              // si ya hay stream iniciado por auto-detect, play() se encarga; de lo contrario intenta iniciar
-              if (videoRef.current && (videoRef.current.srcObject as MediaStream)) {
-                // si hay stream solo pausar/reanudar video HTML
-                const v = videoRef.current
-                if (v.paused) v.play()
-                else v.pause()
-                setIsPlaying(!v.paused)
-              } else {
-                startCameraStream()
-              }
-            }
-          }}
-          className="gradient-blue shadow-lg hover:scale-105"
-        >
-          {isPlaying ? <Pause className="h-4 w-4 md:h-5 md:w-5" /> : <Play className="h-4 w-4 md:h-5 md:w-5" />}
-        </Button>
-
-        <span className="rounded-lg bg-black/50 px-3 py-1.5 font-mono text-sm font-bold text-white backdrop-blur-sm md:px-4 md:py-2 md:text-lg">
-       {formatTime(elapsedTime)}
-
-        </span>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Autopiloto">
+          <Row label="Stack" value={stats.autopilot || "—"} />
+          <Row label="Firmware" value={stats.firmware || "—"} />
+          <Row label="MAVLink" value={stats.mavlink_version ? `v${stats.mavlink_version}` : "—"} />
+          <Row label="CPU" value={fmt(stats.cpu_load, 1, "%")} />
+          <Row label="EKF" value={stats.estimator_ok ? "OK" : "FALLA"} />
+          <Row label="Precisión H/V" value={`${fmt(stats.pos_horiz_acc, 2)} / ${fmt(stats.pos_vert_acc, 2)} m`} />
+          <Row label="WP misión" value={`${stats.mission_seq} / ${stats.mission_total || "—"}`} />
+          <Row label="Errores COM" value={String(stats.errors_comm)} />
+        </Panel>
+        <Panel title="RC / servos">
+          {stats.rc_channels.filter((ch) => ch > 800).length === 0 && (
+            <p className="py-2 text-sm text-muted-foreground">Sin radio RC.</p>
+          )}
+          {stats.rc_channels
+            .filter((ch) => ch > 800)
+            .slice(0, 8)
+            .map((ch, i) => (
+              <div key={i} className="flex items-center gap-3 py-1.5">
+                <span className="w-9 font-mono text-[11px] text-muted-foreground">CH{i + 1}</span>
+                <div className="h-px flex-1 bg-border">
+                  <div
+                    className="h-px bg-primary"
+                    style={{ width: `${Math.min(100, Math.max(0, ((ch - 800) / 1400) * 100))}%` }}
+                  />
+                </div>
+                <span className="w-10 text-right font-mono text-[11px] text-foreground">{ch}</span>
+              </div>
+            ))}
+          {stats.servos.length > 0 && (
+            <p className="pt-2 font-mono text-[11px] text-muted-foreground">
+              Servos {stats.servos.map((s, i) => `S${i + 1}:${s}`).join("  ")}
+            </p>
+          )}
+        </Panel>
+        <Panel title="Ambiente">
+          <Row label="Baro" value={stats.baro_temp == null ? "—" : fmt(stats.baro_temp, 1, "°C")} />
+          <Row label="Presión" value={stats.pressure ? fmt(stats.pressure, 1, "hPa") : "—"} />
+          <Row label="Clima" value={weather?.temperature != null ? fmt(weather.temperature, 1, "°C") : "—"} />
+          <Row
+            label="Viento / HR"
+            value={weather ? `${fmt(weather.windSpeed, 1, "m/s")} · ${fmt(weather.humidity, 0, "%")}` : "—"}
+          />
+          <Row label="Cielo" value={weather?.condition ?? "—"} />
+        </Panel>
       </div>
 
-      <Button
-        size="lg"
-        onClick={handleFullscreen}
-        className="bg-white/90 text-foreground shadow-lg hover:scale-105 hover:bg-white"
-      >
-        <Maximize className="h-4 w-4 md:h-5 md:w-5" />
-      </Button>
-    </div>
-  </div>
-</div>
-
-
-
-
-        <Card className="border-0 bg-white p-6 shadow-xl md:p-8">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-xl bg-blue-100 p-3">
-              <Cpu className="h-6 w-6 text-blue-600" />
-            </div>
-            <h3 className="text-base font-bold text-foreground md:text-lg">Sistema Técnico</h3>
-          </div>
-          <div className="space-y-3 md:space-y-4">
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Shield className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Autopiloto</span>
-              </div>
-              <span className="font-mono text-xs font-bold text-blue-600 md:text-sm">PX4</span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Network className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Protocolo</span>
-              </div>
-              <span className="font-mono text-xs font-bold text-blue-600 md:text-sm">MAVLink</span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Cpu className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Firmware</span>
-              </div>
-              <span className="font-mono text-xs font-bold text-blue-600 md:text-sm">v1.14.0</span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-transparent p-3 md:p-4">
-              <div className="flex items-center gap-3">
-                <Radio className="h-5 w-5 text-blue-600 md:h-6 md:w-6" />
-                <span className="text-sm font-semibold text-foreground md:text-base">Telemetría</span>
-              </div>
-              <span className="font-mono text-xs font-bold text-blue-600 md:text-sm">915 MHz</span>
-            </div>
-          </div>
-        </Card>
-      </div>
+      <Panel title="Terminal MAVLink">
+        <div className="-mx-4 -mb-2">
+          <TelemetryTerminal telemetry={telemetry} />
+        </div>
+      </Panel>
     </div>
   )
 }

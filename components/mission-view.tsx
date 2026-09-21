@@ -1,55 +1,41 @@
 "use client"
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
-import L from "leaflet"
-import "leaflet/dist/leaflet.css"
-import { useDronePosition } from "./useDronePosition"
-import { Card } from "@/components/ui/card"
+import dynamic from "next/dynamic"
+import { TelemetryTerminal } from "./telemetry-terminal"
+import type { TelemetryState } from "./useTelemetry"
 
-export function MissionView() {
-  const drone = useDronePosition()
+const MissionMap = dynamic(() => import("./mission-map"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">Cargando mapa…</div>
+  ),
+})
 
-  const droneIcon = L.divIcon({
-    html: `<div style="transform: rotate(${drone.heading}deg);">
-             <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="blue" stroke="white" stroke-width="1">
-               <path d="M12 2l4 8h-3v8h-2v-8h-3z"/>
-             </svg>
-           </div>`,
-    className: "",
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-  })
-
+export function MissionView({ telemetry }: { telemetry: TelemetryState }) {
+  const t = telemetry.data
   return (
-    <div className="mx-auto max-w-[1800px] space-y-4 p-4 md:space-y-6 md:p-8">
-      <Card className="overflow-hidden border-0 shadow-2xl">
-        <div className="relative aspect-video">
-          <MapContainer
-            center={[drone.latitude, drone.longitude]}
-            zoom={15}
-            scrollWheelZoom
-            className="h-full w-full"
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-            />
-            <Marker position={[drone.latitude, drone.longitude]} icon={droneIcon}>
-              <Popup>
-                <strong>Posición del Dron</strong>
-                <br />
-                Lat: {drone.latitude.toFixed(6)}°
-                <br />
-                Lon: {drone.longitude.toFixed(6)}°
-                <br />
-                Altitud: {drone.altitude} m
-                <br />
-                Rumbo: {drone.heading}°
-              </Popup>
-            </Marker>
-          </MapContainer>
+    <div className="mx-auto max-w-[1600px] space-y-5 px-6 py-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="gcs-kicker">Navegación</p>
+          <h2 className="mt-1 text-xl font-medium tracking-tight">Misión</h2>
+          <div className="brand-rule mt-2 h-px w-32" />
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            {t.flight_mode} · {t.gps_fix_name} · posición SiK
+          </p>
         </div>
-      </Card>
+        <p className="font-mono text-xs text-muted-foreground">
+          {t.satellites} sats · {t.altitude.toFixed(1)} m · {t.speed.toFixed(1)} m/s · {t.heading.toFixed(0)}°
+        </p>
+      </div>
+      <div className="overflow-hidden border border-border border-t-2 border-t-primary">
+        <div className="relative aspect-video">
+          <MissionMap telemetry={telemetry} />
+        </div>
+      </div>
+      <div className="border border-border border-l-2 border-l-primary">
+        <TelemetryTerminal telemetry={telemetry} />
+      </div>
     </div>
   )
 }
