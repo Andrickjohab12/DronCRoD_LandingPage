@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1250" viewBox="0 0 1800 1250" role="img" aria-labelledby="title desc">
+  <title id="title">Cómo funciona un sistema de reconocimiento facial</title>
+  <desc id="desc">Diagrama didáctico del flujo de reconocimiento facial, tecnologías posibles y la integración que sí existe en DronCRoD. Las librerías de visión son ejemplos, no dependencias confirmadas del proyecto.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#071526"/><stop offset="1" stop-color="#102c49"/></linearGradient>
+    <linearGradient id="accent" x2="1"><stop stop-color="#1677ff"/><stop offset="1" stop-color="#42c8ff"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="7" stdDeviation="10" flood-color="#000" flood-opacity=".24"/></filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1L11 6 1 11z" fill="#50caff"/></marker>
+    <marker id="greenArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1L11 6 1 11z" fill="#55e0b0"/></marker>
+    <style>
+      text{font-family:Inter,Segoe UI,Arial,sans-serif;fill:#eaf4ff}.muted{fill:#a3b8ce}.tiny{font-size:14px;letter-spacing:1.4px;font-weight:750}.stage{font-size:19px;font-weight:750}.body{font-size:16px}.small{font-size:14px}.card{fill:#122b45;stroke:#2a4a67;stroke-width:2}.chip{fill:#173956;stroke:#2a5879;stroke-width:1.2}
+    </style>
+  </defs>
+  <rect width="1800" height="1250" fill="url(#bg)"/><circle cx="1680" cy="85" r="260" fill="#1478ff" opacity=".06"/><circle cx="100" cy="1100" r="300" fill="#12b9ce" opacity=".045"/>
+  <text x="80" y="68" class="tiny" fill="#58ccff">DRONCRoD · GUÍA DEL PIPELINE</text>
+  <text x="80" y="128" font-size="43" font-weight="800">Cómo funciona el reconocimiento facial</text>
+  <text x="80" y="169" class="body muted">Del video en vivo a una coincidencia: cada fotograma pasa por varias etapas de visión artificial.</text>
+  <rect x="80" y="202" width="1640" height="58" rx="16" fill="#3a2d20" stroke="#9b7138" stroke-width="1.5"/>
+  <circle cx="110" cy="231" r="8" fill="#ffc36a"/><text x="132" y="237" class="body" fill="#ffd999"><tspan font-weight="750">Importante:</tspan> el repositorio no incluye el código ni las dependencias del reconocedor; las librerías de abajo son opciones comunes, no confirmadas.</text>
+
+  <text x="80" y="310" class="tiny" fill="#58ccff">PIPELINE TÍPICO · EL PROCESO SE REPITE PARA CADA FOTOGRAMA</text>
+  <!-- six stages -->
+  <g filter="url(#shadow)">
+    <rect x="80" y="342" width="250" height="228" rx="22" class="card"/><rect x="360" y="342" width="250" height="228" rx="22" class="card"/><rect x="640" y="342" width="250" height="228" rx="22" class="card"/><rect x="920" y="342" width="250" height="228" rx="22" class="card"/><rect x="1200" y="342" width="250" height="228" rx="22" class="card"/><rect x="1480" y="342" width="240" height="228" rx="22" class="card"/>
+  </g>
+  <g fill="#55caff"><circle cx="113" cy="376" r="16"/><circle cx="393" cy="376" r="16"/><circle cx="673" cy="376" r="16"/><circle cx="953" cy="376" r="16"/><circle cx="1233" cy="376" r="16"/><circle cx="1513" cy="376" r="16"/></g>
+  <g fill="#071526" font-size="14" font-weight="800" text-anchor="middle"><text x="113" y="381">1</text><text x="393" y="381">2</text><text x="673" y="381">3</text><text x="953" y="381">4</text><text x="1233" y="381">5</text><text x="1513" y="381">6</text></g>
+  <text x="105" y="423" class="stage">Captura</text><text x="105" y="456" class="body muted">Cámara entrega video</text><text x="105" y="480" class="body muted">como fotogramas.</text><rect x="105" y="514" width="185" height="30" rx="10" class="chip"/><text x="120" y="535" class="small" fill="#8fdcff">OpenCV · VideoCapture</text>
+  <text x="385" y="423" class="stage">Detectar</text><text x="385" y="456" class="body muted">Encuentra caras y</text><text x="385" y="480" class="body muted">sus coordenadas.</text><rect x="385" y="514" width="200" height="30" rx="10" class="chip"/><text x="400" y="535" class="small" fill="#8fdcff">MediaPipe · RetinaFace</text>
+  <text x="665" y="423" class="stage">Alinear</text><text x="665" y="456" class="body muted">Ajusta escala, giro</text><text x="665" y="480" class="body muted">y recorte del rostro.</text><rect x="665" y="514" width="192" height="30" rx="10" class="chip"/><text x="680" y="535" class="small" fill="#8fdcff">OpenCV · landmarks</text>
+  <text x="945" y="423" class="stage">Representar</text><text x="945" y="456" class="body muted">La red convierte la cara</text><text x="945" y="480" class="body muted">en un vector numérico.</text><rect x="945" y="514" width="200" height="30" rx="10" class="chip"/><text x="960" y="535" class="small" fill="#8fdcff">InsightFace · embeddings</text>
+  <text x="1225" y="423" class="stage">Comparar</text><text x="1225" y="456" class="body muted">Mide distancia contra</text><text x="1225" y="480" class="body muted">vectores registrados.</text><rect x="1225" y="514" width="195" height="30" rx="10" class="chip"/><text x="1240" y="535" class="small" fill="#8fdcff">Coseno · umbral</text>
+  <text x="1505" y="423" class="stage">Responder</text><text x="1505" y="456" class="body muted">Coincidencia o</text><text x="1505" y="480" class="body muted">“sin identificar”.</text><rect x="1505" y="514" width="184" height="30" rx="10" class="chip"/><text x="1520" y="535" class="small" fill="#8fdcff">OpenCV · etiqueta</text>
+  <path d="M330 450h22" stroke="#50caff" stroke-width="4" marker-end="url(#arrow)"/><path d="M610 450h22" stroke="#50caff" stroke-width="4" marker-end="url(#arrow)"/><path d="M890 450h22" stroke="#50caff" stroke-width="4" marker-end="url(#arrow)"/><path d="M1170 450h22" stroke="#50caff" stroke-width="4" marker-end="url(#arrow)"/><path d="M1450 450h22" stroke="#50caff" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- explanation -->
+  <rect x="80" y="615" width="790" height="270" rx="24" fill="#0e253d" stroke="#347aa8" stroke-width="2"/>
+  <text x="118" y="660" class="tiny" fill="#58ccff">¿QUÉ HACE CADA PIEZA?</text>
+  <text x="118" y="704" class="body"><tspan font-weight="750">OpenCV</tspan><tspan class="muted"> · leer cámara, recortar caras y dibujar cuadros.</tspan></text>
+  <text x="118" y="744" class="body"><tspan font-weight="750">MediaPipe / RetinaFace</tspan><tspan class="muted"> · localizar rostros; no identifican por sí solos.</tspan></text>
+  <text x="118" y="784" class="body"><tspan font-weight="750">InsightFace / face_recognition</tspan><tspan class="muted"> · obtener rasgos y comparar identidades.</tspan></text>
+  <text x="118" y="824" class="body"><tspan font-weight="750">Umbral de similitud</tspan><tspan class="muted"> · decide si el parecido alcanza el nivel definido.</tspan></text>
+  <text x="118" y="858" class="small muted">La elección real depende del modelo, hardware y requisitos del sistema.</text>
+
+  <rect x="910" y="615" width="810" height="270" rx="24" fill="#0e253d" stroke="#347aa8" stroke-width="2"/>
+  <text x="948" y="660" class="tiny" fill="#58ccff">¿CÓMO SE DECIDE UNA IDENTIDAD?</text>
+  <rect x="950" y="690" width="260" height="74" rx="16" fill="#153654" stroke="#326286"/><text x="976" y="720" class="body" font-weight="700">Vector de la cara</text><text x="976" y="746" class="small muted">p. ej., embedding numérico</text>
+  <path d="M1210 727h55" stroke="#50caff" stroke-width="3" marker-end="url(#arrow)"/>
+  <rect x="1270" y="690" width="390" height="74" rx="16" fill="#153654" stroke="#326286"/><text x="1296" y="720" class="body" font-weight="700">Comparar con galería autorizada</text><text x="1296" y="746" class="small muted">calcular distancia / similitud</text>
+  <path d="M1465 764v35h-180" fill="none" stroke="#50caff" stroke-width="3" marker-end="url(#arrow)"/>
+  <rect x="950" y="800" width="325" height="55" rx="14" fill="#103a3b" stroke="#298a75"/><text x="974" y="834" class="body" fill="#8cf0cd">Pasa el umbral → posible match</text>
+  <rect x="1300" y="800" width="360" height="55" rx="14" fill="#382d22" stroke="#8e6531"/><text x="1324" y="834" class="body" fill="#ffd08a">No lo pasa → desconocido</text>
+
+  <!-- project's actual wiring -->
+  <rect x="80" y="925" width="1640" height="235" rx="25" fill="#102a3e" stroke="#55b79b" stroke-width="2"/>
+  <text x="120" y="969" class="tiny" fill="#71e3bc">LO QUE SÍ ESTÁ IMPLEMENTADO EN DRONCRoD</text>
+  <rect x="120" y="1000" width="310" height="90" rx="17" fill="#14334a" stroke="#326286"/><text x="148" y="1037" class="stage">Servicio Python</text><text x="148" y="1067" class="small muted">comentado como servidor Flask</text>
+  <path d="M430 1045h74" stroke="#55e0b0" stroke-width="4" marker-end="url(#greenArrow)"/>
+  <rect x="515" y="1000" width="410" height="90" rx="17" fill="#14334a" stroke="#326286"/><text x="543" y="1037" class="stage">MJPEG · /video_feed</text><text x="543" y="1067" class="small muted">localhost:5000 · video procesado, según UI</text>
+  <path d="M925 1045h74" stroke="#55e0b0" stroke-width="4" marker-end="url(#greenArrow)"/>
+  <rect x="1010" y="1000" width="350" height="90" rx="17" fill="#14334a" stroke="#326286"/><text x="1038" y="1037" class="stage">Vista de video web</text><text x="1038" y="1067" class="small muted">React muestra el stream como imagen</text>
+  <rect x="1400" y="993" width="275" height="112" rx="17" fill="#3a2d20" stroke="#9b7138"/><text x="1425" y="1028" class="tiny" fill="#ffc36a">NO LOCALIZADO</text><text x="1425" y="1058" class="small">Modelo, detector, registros</text><text x="1425" y="1082" class="small">y umbral no están en el repo.</text>
+  <text x="120" y="1135" class="small muted">En package.json no aparecen librerías faciales. El servicio que genera el stream debe aportar el procesamiento; la web solo lo presenta.</text>
+  <text x="80" y="1208" class="small muted">Diagrama explicativo: pipeline y librerías son referencias posibles, no afirmaciones sobre la implementación actual.</text>
+</svg>

@@ -44,7 +44,7 @@ interface DroneStats {
 }
 
 export function MonitorView() {
-  const stats = useTelemetry()
+const { data: stats } = useTelemetry()
   const weather = useWeather() // 🌦️ Hook del clima
   const [elapsedTime, setElapsedTime] = useState(0) // segundos totales
 const timerRef = useRef<NodeJS.Timeout | null>(null)
